@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -64,8 +65,11 @@ public class OrderManager : Robot
 
     private void SavePendingOrders()
     {
-        // Capture every current pending order into a serializable snapshot.
-        var snapshot = PendingOrders.Select(order => PendingOrderSnapshot.From(order)).ToList();
+        // Capture each unique pending order into a serializable snapshot.
+        var snapshot = PendingOrders
+            .DistinctBy(GetPendingOrderKey)
+            .Select(order => PendingOrderSnapshot.From(order))
+            .ToList();
 
         // Write the snapshot to disk in a human-readable JSON format.
         var json = JsonSerializer.Serialize(snapshot, JsonOptions);
@@ -103,6 +107,12 @@ public class OrderManager : Robot
         // Restore each snapshot entry individually so one failure does not block the rest.
         foreach (var pendingOrder in snapshot)
         {
+            if (HasMatchingPendingOrder(pendingOrder))
+            {
+                Print("Skipped order {0}: matching pending order already exists", pendingOrder.Label);
+                continue;
+            }
+
             if (TryRestorePendingOrder(pendingOrder))
             {
                 restoredCount++;
@@ -194,6 +204,31 @@ public class OrderManager : Robot
         }
 
         return true;
+    }
+
+    private bool HasMatchingPendingOrder(PendingOrderSnapshot snapshot)
+    {
+        return PendingOrders.Any(order => GetPendingOrderKey(order) == GetPendingOrderKey(snapshot));
+    }
+
+    private static string GetPendingOrderKey(PendingOrder order)
+    {
+        return GetPendingOrderKey(order.SymbolName, order.OrderType, order.TradeType, order.TargetPrice);
+    }
+
+    private static string GetPendingOrderKey(PendingOrderSnapshot snapshot)
+    {
+        return GetPendingOrderKey(snapshot.SymbolName, snapshot.OrderType, snapshot.TradeType, snapshot.TargetPrice);
+    }
+
+    private static string GetPendingOrderKey(string symbolName, PendingOrderType orderType, TradeType tradeType, double targetPrice)
+    {
+        return string.Join(
+            "|",
+            symbolName,
+            orderType,
+            tradeType,
+            Math.Round(targetPrice, 10).ToString("G17", CultureInfo.InvariantCulture));
     }
 
     private string GetSnapshotPath()
