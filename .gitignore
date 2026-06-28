@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+*.cache
+*.log
+*.tmp
+*.pid
+*.pdb
+*.db
+*.db-shm
+*.db-wal
+*.algo
